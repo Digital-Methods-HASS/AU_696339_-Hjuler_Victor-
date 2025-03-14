@@ -1,0 +1,198 @@
+---
+title: "Make Countries Move"
+author: "Victor Valdemar Hjuler"
+date: "14/03/2025"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#  Explore global development with R
+In this exercise, you will load a filtered `gapminder` dataset -  with a subset of data on global development from 1952 - 2007 in increments of 5 years - to capture the period between the Second World War and the Global Financial Crisis. 
+
+**Your task: Explore the data and visualise it in both static and animated ways, providing answers and solutions to 7 questions/tasks within this script.** 
+
+- **Submit to Github this script with solutions and its knitted version.**  
+- **Submit to Brightspace a document with the (1) URL of this script and its knitted version in Github (2) answer of 250 words and a (3) visualisation of the Final Question**
+
+## Get the necessary packages
+First, start with installing and activating the relevant packages `tidyverse`, `gganimate`, and `gapminder` if you do not have them already. 
+*Pay attention to what warning messages you get when installing `gganimate`, as your computer might need other packages than `gifski` and `av`*
+
+```{r libraries, echo = FALSE}
+# install.packages("gganimate")
+# install.packages("gifski")
+# install.packages("av")
+# install.packages("gapminder")
+library(tidyverse)
+library(gganimate)
+library(gifski)
+library(av)
+library(gapminder)
+```
+
+## Look at the data and tackle the tasks
+First, see which specific years are actually represented in the dataset and what variables are being recorded for each country. Note that when you run the cell below, Rmarkdown will give you two results - one for each line - that you can flip between.
+```{r}
+str(gapminder)
+unique(gapminder$year)
+head(gapminder)
+```
+
+The dataset contains information on each country in the sampled year, its continent, life expectancy, population, and GDP per capita.
+
+Let's plot all the countries in 1952.
+```{r 1957}
+theme_set(theme_bw())  # set theme to white background for better visibility
+
+ggplot(gapminder, aes(x = gdpPercap, y = lifeExp, color = continent)) +
+  geom_point() +
+  scale_x_log10() +
+  labs(
+    x = "BNP per indbygger (USD, log-skala)",
+    y = "Forventet levetid (år)",
+    title = "Sammenhæng mellem BNP per indbygger og forventet levetid"
+  ) +
+  theme_minimal()
+
+options(scipen = 10)
+
+library(dplyr)
+
+gapminder_1952 <- gapminder %>% filter(year == 1952)
+gapminder_1952 %>% arrange(desc(gdpPercap)) %>% head(1)
+
+richest_1952 <- gapminder_1952 %>% arrange(desc(gdpPercap)) %>% head(1)
+
+print(richest_1952) 
+```
+ 
+...
+
+We see an interesting spread with an outlier to the right. Explore who it is so you can answer question 2 below!
+
+
+Next, you can generate a similar plot for 2007 and compare the differences
+```{r 2007}
+ggplot(subset(gapminder, year == 2007), aes(gdpPercap, lifeExp, size = pop)) +
+  scale_x_log10() +
+  geom_point()
+  ggtitle("2007")
+  
+  ggplot(gapminder, aes(x = gdpPercap, y = lifeExp, color = continent)) +
+  geom_point() +
+  scale_x_log10() +
+  labs(
+    x = "BNP per indbygger (USD, log-skala)",
+    y = "Forventet levetid (år)",
+    title = "Sammenhæng mellem BNP per indbygger og forventet levetid"
+  ) +
+  theme_minimal()
+  
+  options(scipen = 10)
+  
+gapminder_2007 <- gapminder %>% filter(year == 2007)
+gapminder_2007 %>% arrange(desc(gdpPercap)) %>% head(5)
+gapminder -> gapminder
+
+``` 
+
+...
+
+The black bubbles are a bit hard to read, the comparison would be easier with a bit more visual differentiation.
+
+### Questions for the static figures:
+
+1. *Answer: why does it make sense to have a log10 scale (`scale_x_log10()`) on the x axis?* (hint: try to comment it out and observe the result)
+
+Når man laver Grafferne for 1952 og 2007 ved bruge genvejen scale_x_log10() så viser den landene logaritmisk, dvs. spredt ud over aksen. det er brugbart når man vil se størelseorden på de enkel landes udvikling.  derimod hvis jeg unlader at bruge Genvejen, viser den dataen på landene af små værdier presse sig mod y-aksen
+
+2. *Answer: In Figure 1: Who is the outlier (the richest country in 1952) far right on the x axis?* 
+
+ det land som var outliner ifølge dataen som plasere sig længst ud til x-aksen viser sig at at være kuwait (det er fundet af olie i perioden, navnligt lands lille størrelse) 
+
+3. *Fix Figures 1 and 2: Differentiate the **continents** by color, and fix the axis labels and units to be more legible (**Hint**: the 2.50e+08 is so called "scientific notation". You want to eliminate it.)*
+
+# 
+
+4. *Answer: What are the five richest countries in the world in 2007?*
+
+ Listen over de lande som var de rigeste i 2007 er i denne her rækkefølgen: Norge, Kuwait, Singapore, USA og Ireland. 
+
+##  Make it move!
+
+The comparison would be easier if we had the two graphs together, animated. We have a lovely tool in R to do this: the `gganimate` package. Beware that there may be other packages your operating system needs in order to glue interim images into an animation or video. Read the messages when installing the package.
+
+Also, there are *two* ways of animating the gapminder ggplot.
+
+### Option 1: Animate using transition_states() 
+
+The first step is to create the object-to-be-animated
+```{r anim1 start}
+#library(scales)
+
+animated_plot <- ggplot(gapminder, aes(x = gdpPercap, y = lifeExp, size = pop, color = continent)) +
+  geom_point(alpha = 0.7) +
+  scale_x_log10(labels = scales::comma) + 
+  scale_y_continuous(labels = scales::number_format(scale = 1)) +
+  labs(
+    title = "Udvikling af BNP og Levealder ({frame_time})",
+    x = "BNP per indbygger (USD, log-skala)",
+    y = "Forventet levetid (år)"
+  ) +
+  theme_minimal() +
+  transition_time(year)
+```
+
+...
+
+This plot collates all the points across time. The next step is to split it into years and animate it. This may take some time, depending on the processing power of your computer (and other things you are asking it to do). Beware that the animation might appear in the bottom right 'Viewer' pane, not in this rmd preview. You need to `knit` the document to get the visual inside an html file.
+
+```{r anim1}
+animated_plot + transition_states(year, 
+                      transition_length = 1,
+                      state_length = 1)
+
+```
+...
+
+Notice how the animation moves jerkily, 'jumping' from one year to the next 12 times in total. This is a bit clunky, which is why it's good we have another option. 
+
+
+### Option 2 Animate using transition_time()
+This option smooths the transition between different 'frames', because it interpolates and adds transitional years where there are gaps in the timeseries data.
+
+```{r anim2}
+anim2 <- ggplot(gapminder, aes(gdpPercap, lifeExp, size = pop)) +
+  geom_point() +
+  scale_x_log10() + # convert x to log scale
+  transition_time(year) 
+anim2
+```
+
+The much smoother movement in Option 2 will be much more noticeable if you add a title to the chart, that will page through the years corresponding to each frame.
+
+Now, choose one of the animation options and get it to work. You may need to troubleshoot your installation of `gganimate` and other packages 
+
+### Tasks for the animations:
+
+5. *Can you add a title to one or both of the animations above that will change* 
+ *in sync with the animation?* *(**Hint**: search labeling for `transition_states()` and `transition_time()` functions respectively)*
+ 
+ som det vises i titlen i grafen så ser man den ændre titlen i takt med dataen kommer frem mellem 1952 og 2007.   
+
+
+6. *Can you made the axes' labels and units more readable? Consider expanding the abbreviated labels as well as the scientific notation in the legend and x axis to whole numbers. Also, differentiate the countries from different continents by color*
+
+ som det ses i grafen så har hver af de 5 konsinenter fået hver deres farve, og man ser en klar tendens at de blå punkter (som repræstentere europa) er dem som mest udvikler sig på flere fronter. dog så ses der også de grønne punkter (som er Asien,) der bevæger sig meget frem og tilbage i graffen/Animasionen. 
+
+### Final Question
+7. **Is the world a better place today than it was in the year you were born?** *Answer this question using the gapminder data.  Define better either as more prosperous, more free, more healthy, or suggest another measure that you can get from gapminder. Submit a 250 word answer with an illustration to Brightspace. Include a URL in your Brightspace submission that links to the coded solutions in Github. [Hint: if you wish to have more data than is in the filtered gapminder, you can load either the `gapminder_unfiltered` dataset or download more historical data at https://www.gapminder.org/data/ ]*
+
+Der kan være forskellige årsager til at grafen viser en udvikling på et globalt plan fra mit fødselsår (1999 ) og frem til 2007 hvor man på alle fem kontinenter og ikke bare i den vestlige del som Europa og Amerika ser mere sunde og frie folk i . En af årsagerne kan muligvis være at man efter murens fald i 1989 får etableret en unipolær verdensorden, som særligt er inspireret ud fra et vestligt forbillede med udbredelse af demokrati og menneskerettigheder. i det indebære det også nyliberalismen som rummer ikke bare værdimæssige implikationer, men også en udrulning af kapitalistiske markedets kræfter. Det gør at verden interagere meget mere end før, hvor man kan forstille sig at som led i den udvikling at medicinal industrien har kunne komme ud på andre markeder end blot Europa og Amerika. Når man taler mere frie samfund, så skal det stadigvæk være med visse forbehold man gør sig. For eksempel ved at man ser at Afrika og Asien trods ser de bevæger sig længere op af X-aksen, så har man en større tendens for autokratiske stater. Når det så topper mellem 1999 -2007 ses det i lyset at man er noget højdepunktet i det 21 århundred med globalisering, hvor landene er blevet endnu tættere og dermed også deres markedet. Disse faktor kan være  indikationer for at folk frihed og sundhed forbedres, men andre mere socioøkonomiske grunde kan også spille ind, og som ikke fremgår i min graf. 
+
+
+
+
