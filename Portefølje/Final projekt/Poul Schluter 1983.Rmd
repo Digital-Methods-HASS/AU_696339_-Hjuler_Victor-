@@ -1,0 +1,194 @@
+---
+title: "Poul Schluter 1983"
+author: "Victor Valdemar Hjuler" 
+output: html_document           
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE,
+                      message = FALSE)
+
+library(tidyverse)
+library(here)
+
+# For text mining:
+
+library(pdftools)
+library(tidytext)
+library(textdata) 
+library(ggwordcloud)
+```
+
+
+### Poul_schluter.pdf:
+```{r get-document}
+Poul_path <- here("data","Poul_Schlüters_nytårstale_1983.pdf")
+Poul_text <- pdf_text(Poul_path)
+```
+
+
+# valg af sider 
+```{r single-page}
+Poul_p9 <- Poul_text[1:5]
+Poul_p9
+```
+
+
+
+### Splittelse af linjerne 
+```{r split-lines}
+Poul_df <- data.frame(Poul_text) %>% 
+  mutate(text_full = str_split(Poul_text, pattern = '\n')) %>% 
+  unnest(text_full) %>% 
+  mutate(text_full = str_trim(text_full)) 
+
+```
+
+### opdelling af kolonner i tokens 
+```{r tokenize}
+Poul_tokens <- Poul_df %>% 
+  unnest_tokens(word, text_full)
+Poul_tokens
+
+```
+
+### optælling af ord 
+```{r count-words}
+Poul_wc <- Poul_tokens %>% 
+  count(word) %>% 
+  arrange(-n)
+Poul_wc
+```
+
+ 
+
+### fjern stopordliste 
+```{r stopwords}
+Poul_stop <- Poul_tokens %>% 
+  anti_join(stop_words) %>% 
+  select(-Poul_text)     
+```
+
+#Tæller ordene igen: 
+```{r count-words2}
+Poul_swc <- Poul_stop %>% 
+  count(word) %>% 
+  arrange(-n)
+```
+
+#Denne kode fjerner alle nummere fra pdf.filen
+```{r skip-numbers}
+
+Poul_no_numeric <- Poul_stop %>% 
+  filter(is.na(as.numeric(word)))
+```
+
+
+
+### de mest hyppige ord i wordcloud  
+```{r wordcloud-prep}
+length(unique(Poul_no_numeric$word))
+
+# 100 mest vigtigt ord i en cloud
+Poul_top100 <- Poul_no_numeric %>% 
+  count(word) %>% 
+  arrange(-n) %>% 
+  head(100)
+Poul_top100
+```
+### Wordcloud med de top100 mest hyppige ord 
+```{r wordcloud}
+Poul_cloud <- ggplot(data = Poul_top100, aes(label = word)) +
+  geom_text_wordcloud() +
+  theme_minimal()
+
+Poul_cloud
+```
+
+### Wordstar i farver
+```{r wordcloud-pro}
+ggplot(data = Poul_top100, aes(label = word, size = n)) +
+  geom_text_wordcloud_area(aes(color = n), shape = "star") +
+  scale_size_area(max_size = 12) +
+  scale_color_gradientn(colors = c("darkgreen","blue","red")) +
+  theme_minimal()
+```
+
+
+### Sentiment analysis med AFINN_ da af Finn Årup Nielsen
+
+
+### "afinn_2": top 5 posetiver/ negativer & indlæsning af AFINN_da
+```{r afinn}
+afinn <- read_csv2("data/AFINN_da.csv")
+
+AFINN_da_pos <- afinn %>% 
+  filter(value %in% c(3,4,5))
+
+AFINN_da_pos 
+```
+
+
+
+### Sentiment analyse med afinn_da: 
+
+### Anker.pdf med måling af værdier som både er posetiver og negativer 
+
+```{r bind-afinn}
+Poul_tokens %>% distinct(word)
+Poul_afinn <- Poul_stop %>% 
+  inner_join(afinn)
+Poul_afinn
+```
+
+### sentiment rangering med graf over posetiver og negativer 
+
+```{r count-afinn}
+Poul_afinn_hist <- Poul_afinn %>% 
+  count(value)
+
+# her bliver de plottet : 
+ggplot(data = Poul_afinn_hist, aes(x = value, y = n)) +
+  geom_col(aes(fill = value)) +
+  theme_bw()
+```
+
+### Større undersøgning af de 100 ord 
+
+```{r afinn-2}
+Poul_afinn2 <- Poul_afinn %>%  
+  filter(value == 2)
+```
+
+### Ord med den højeste score i posetiver/negativer 
+
+
+```{r afinn-2-more}
+# De ord med højst 2-score words:
+unique(Poul_afinn2$word)
+
+# optælling & plotting
+Poul_afinn2_n <- Poul_afinn2 %>% 
+  count(word, sort = TRUE) %>% 
+  mutate(word = fct_reorder(factor(word), n))
+
+
+ggplot(data = Poul_afinn2_n, aes(x = word, y = n)) +
+  geom_col() +
+  coord_flip() +
+  theme_bw()
+
+
+```
+###  Opsummering af Schluters  tale i score 
+
+
+```{r summarize-afinn}
+Poul_summary <- Poul_afinn2 %>% 
+  summarize(
+    mean_score = mean(value),
+    median_score = median(value)
+  )
+Poul_summary 
+```

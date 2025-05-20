@@ -1,0 +1,190 @@
+---
+title: "Anders Fogh Rasmussen 2007"
+author: "victor Valdemar Hjuler"
+output: html_document 
+---
+### Grundpakke 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      warning = FALSE,
+                      message = FALSE)
+
+library(tidyverse)
+library(here)
+
+
+library(pdftools)
+library(tidytext)
+library(textdata) 
+library(ggwordcloud)
+```
+
+
+### Anders_Fogh_2007.pdf:
+```{r get-document}
+Anders_path <- here("data","Anders_Fogh_Rasmussens_nytårstale_2006.pdf")
+Anders_text <- pdf_text(Anders_path)
+```
+
+
+### siderne 
+```{r single-page}
+Anders_p5 <- Anders_text[1:5]
+Anders_p5
+```
+
+
+
+### splittelse i teksten i linjer 
+```{r split-lines}
+Anders_df <- data.frame(Anders_text) %>% 
+  mutate(text_full = str_split(Anders_text, pattern = '\n')) %>% 
+  unnest(text_full) %>% 
+  mutate(text_full = str_trim(text_full)) 
+
+```
+
+### opdelling af kolonner i tokens 
+
+```{r tokenize}
+Anders_tokens <- Anders_df %>% 
+  unnest_tokens(word, text_full)
+Anders_tokens
+
+```
+
+### optælling af ord 
+```{r count-words}
+Anders_wc <- Anders_tokens %>% 
+  count(word) %>% 
+  arrange(-n)
+Anders_wc
+```
+
+
+### fjernelse af Stopordsliste 
+```{r stopwords}
+Anders_stop <- Anders_tokens %>% 
+  anti_join(stop_words) %>% 
+  select(-Anders_text)     
+```
+
+#Tæller ordene igen: 
+```{r count-words2}
+Anders_swc <- Anders_stop %>% 
+  count(word) %>% 
+  arrange(-n)
+```
+
+#Denne kode fjerner alle nummere fra pdf.filen
+```{r skip-numbers}
+
+Anders_no_numeric <- Anders_stop %>% 
+  filter(is.na(as.numeric(word)))
+```
+
+### de mest hyppige ord i wordcloud  
+
+```{r wordcloud-prep}
+# de 100 mest unikke ord 
+length(unique(Anders_no_numeric$word))
+
+
+# 100 mest vigtigt ord i en cloud
+Anders_top100 <- Anders_no_numeric %>% 
+  count(word) %>% 
+  arrange(-n) %>% 
+  head(100)
+Anders_top100
+```
+
+
+```{r wordcloud}
+Anders_cloud <- ggplot(data = Anders_top100, aes(label = word)) +
+  geom_text_wordcloud() +
+  theme_minimal()
+
+Anders_cloud
+```
+
+### Farveindeling i sjerne
+```{r wordcloud-pro}
+ggplot(data = Anders_top100, aes(label = word, size = n)) +
+  geom_text_wordcloud_area(aes(color = n), shape = "star") +
+  scale_size_area(max_size = 12) +
+  scale_color_gradientn(colors = c("darkgreen","blue","red")) +
+  theme_minimal()
+```
+
+
+### AFINN_da from Finn Årup Nielsen,
+  
+### "afinn_da": rangering fra de 5 mest posetive til de 5 mest negative 
+
+```{r afinn}
+afinn <- read_csv2("data/AFINN_da.csv")
+
+
+AFINN_da_pos <- afinn %>% 
+  filter(value %in% c(3,4,5))
+
+AFINN_da_pos
+```
+
+
+### Sentiment analyse med afinn_da: 
+
+### Anker.pdf med måling af værdier som både er posetiver og negativer
+ 
+```{r bind-afinn}
+Anders_tokens %>% distinct(word)
+Anders_afinn <- Anders_stop %>% 
+  inner_join(afinn)
+Anders_afinn
+```
+
+### sentiment rangering med graf over posetiver og negativer 
+
+```{r count-afinn}
+Anders_afinn_hist <- Anders_afinn %>% 
+     count(value)
+
+ggplot(data = Anders_afinn_hist, aes(x = value, y = n)) +
+  geom_col(aes(fill = value)) +
+  theme_bw()
+```
+
+Investigate some of the words in a bit more depth:
+```{r afinn-2}
+Anders_afinn2 <- Anders_afinn %>%  
+  filter(value == 2)
+```
+
+```{r afinn-2-more}
+# de to mest unikke ord:
+unique(Anders_afinn2$word)
+
+# optælling & plotting
+Anders_afinn2_n <- Anders_afinn2 %>% 
+  count(word, sort = TRUE) %>% 
+  mutate(word = fct_reorder(factor(word), n))
+
+
+ggplot(data = Anders_afinn2_n, aes(x = word, y = n)) +
+  geom_col() +
+  coord_flip() +
+  theme_bw()
+
+```
+
+### Opsummering af Fogh tale i score 
+
+```{r summarize-afinn}
+Anders_summary <- Anders_afinn2 %>% 
+  summarize(
+    mean_score = mean(value),
+    median_score = median(value)
+  )
+Anders_summary 
+```
+
